@@ -4,6 +4,9 @@ Run this on the Linux host (e.g. 192.168.1.40) with::
 
     python3 server/state_server.py
 
+This starts the button state API on port 5000 and serves the web UI
+from ``server/web`` on port 8000.
+
 Endpoints::
 
 * ``GET /states`` – return all button states as JSON.
@@ -16,12 +19,13 @@ States are persisted to ``button_states.json`` and schedules to
 ``schedules.json`` in the current working directory so they survive restarts.
 """
 
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, SimpleHTTPRequestHandler
 import json
 import os
 import threading
 import time
 from datetime import datetime, timedelta
+from functools import partial
 
 STATE_FILE = "button_states.json"
 SCHEDULE_FILE = "schedules.json"
@@ -250,37 +254,6 @@ def schedule_loop():
             if s["active"]:
                 if not s["flashing"] and now >= s.get("overdue_start", now + timedelta(days=3650)):
                     s["flashing"] = True
-                # actual flashing handled by firmware
-        time.sleep(1)
-
-
-def handle_reset(chip, pin):
-    now = datetime.now()
-    for s in list(SCHEDULES):
-        if s["chip"] == chip and s["pin"] == pin:
-            if s.get("repeat"):
-                s["active"] = False
-                s["flashing"] = False
-                s["due_dt"] = add_interval(s["due_dt"], s["repeat"])
-                while s["due_dt"] <= now:
-                    s["due_dt"] = add_interval(s["due_dt"], s["repeat"])
-            else:
-                SCHEDULES.remove(s)
-            save_schedules()
-            break
-
-
-def schedule_loop():
-    while True:
-        now = datetime.now()
-        for s in SCHEDULES:
-            if not s["active"] and now >= s["due_dt"]:
-                s["active"] = True
-                set_state(s["chip"], s["pin"], 1)
-                s["overdue_start"] = s["due_dt"] + parse_timedelta(s.get("overdue"))
-            if s["active"]:
-                if not s["flashing"] and now >= s.get("overdue_start", now + timedelta(days=3650)):
-                    s["flashing"] = True
                 if s["flashing"]:
                     current_sec = int(time.time())
                     if current_sec != s["last_flash"]:
@@ -290,11 +263,20 @@ def schedule_loop():
         time.sleep(1)
 
 
+def run_web_server():
+    web_dir = os.path.join(os.path.dirname(__file__), "web")
+    handler = partial(SimpleHTTPRequestHandler, directory=web_dir)
+    server = HTTPServer(("", 8000), handler)
+    print("Serving web interface on port 8000")
+    server.serve_forever()
+
+
 def run():
     server_address = ("", 5000)
     httpd = HTTPServer(server_address, Handler)
     print("Starting button state server on port 5000")
     threading.Thread(target=schedule_loop, daemon=True).start()
+    threading.Thread(target=run_web_server, daemon=True).start()
     httpd.serve_forever()
 
 
