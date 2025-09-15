@@ -8,6 +8,7 @@
 </head>
 <body>
   <div class="container">
+    <button id="theme-toggle" type="button" class="theme-toggle">í¼“</button>
     <h1>Chore Schedules</h1>
     <section id="schedule-list">
       <table>
@@ -55,6 +56,10 @@
         </fieldset>
         <fieldset>
           <legend>Overdue after (optional)</legend>
+          <div class="overdue-presets">
+            <button type="button" data-overdue="1d">1 day</button>
+            <button type="button" data-overdue="3d">3 days</button>
+          </div>
           <label>Days
             <input type="number" id="overdue-days" min="0" />
           </label>

@@ -13,6 +13,13 @@ const PIN_LABELS = [
 ];
 const scheduleMap = {};
 
+function initTheme() {
+  const stored = localStorage.getItem('theme');
+  const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const useDark = stored ? stored === 'dark' : preferDark;
+  document.body.classList.toggle('dark', useDark);
+}
+
 function buildGrid() {
   const grid = document.getElementById('pin-grid');
   PIN_LAYOUT.flat().forEach(([chip, pin], idx) => {
@@ -42,6 +49,8 @@ function handlePinClick(chip, pin) {
     populateForm(sched);
   } else {
     document.getElementById('form').reset();
+    document.querySelectorAll('.repeat-presets button, .overdue-presets button').forEach(b => b.classList.remove('active'));
+    document.getElementById('repeat-advanced').classList.add('hidden');
     selectPin(chip, pin);
     document.getElementById('delete').classList.add('hidden');
   }
@@ -88,11 +97,28 @@ function populateForm(s) {
   adv.classList.add('hidden');
   document.getElementById('repeat-days').value = s.repeat?.days || '';
   document.getElementById('repeat-hours').value = s.repeat?.hours || '';
-  if (s.repeat && !((s.repeat.days === 1 || s.repeat.days === 7) && !s.repeat.hours)) {
-    adv.classList.remove('hidden');
+  document.querySelectorAll('.repeat-presets button').forEach(b => b.classList.remove('active'));
+  if (s.repeat) {
+    if ((s.repeat.days === 1 || s.repeat.days === 7) && !s.repeat.hours) {
+      const type = s.repeat.days === 1 ? 'daily' : 'weekly';
+      const btn = document.querySelector(`.repeat-presets button[data-repeat="${type}"]`);
+      if (btn) btn.classList.add('active');
+    } else {
+      adv.classList.remove('hidden');
+    }
   }
   document.getElementById('overdue-days').value = s.overdue?.days || '';
   document.getElementById('overdue-hours').value = s.overdue?.hours || '';
+  document.querySelectorAll('.overdue-presets button').forEach(b => b.classList.remove('active'));
+  if (s.overdue) {
+    if (s.overdue.days === 1 && !s.overdue.hours) {
+      const btn = document.querySelector('.overdue-presets button[data-overdue="1d"]');
+      if (btn) btn.classList.add('active');
+    } else if (s.overdue.days === 3 && !s.overdue.hours) {
+      const btn = document.querySelector('.overdue-presets button[data-overdue="3d"]');
+      if (btn) btn.classList.add('active');
+    }
+  }
   document.getElementById('delete').classList.remove('hidden');
 }
 
@@ -125,13 +151,32 @@ function applyDuePreset(type) {
   input.value = target.toISOString().slice(0,16);
 }
 
-function setRepeatPreset(type) {
+function toggleRepeatPreset(btn) {
+  const type = btn.dataset.repeat;
+  const active = btn.classList.contains('active');
+  document.querySelectorAll('.repeat-presets button[data-repeat]').forEach(b => b.classList.remove('active'));
   const adv = document.getElementById('repeat-advanced');
   adv.classList.add('hidden');
   document.getElementById('repeat-days').value = '';
   document.getElementById('repeat-hours').value = '';
-  if (type === 'daily') document.getElementById('repeat-days').value = 1;
-  if (type === 'weekly') document.getElementById('repeat-days').value = 7;
+  if (!active) {
+    btn.classList.add('active');
+    if (type === 'daily') document.getElementById('repeat-days').value = 1;
+    if (type === 'weekly') document.getElementById('repeat-days').value = 7;
+  }
+}
+
+function toggleOverduePreset(btn) {
+  const type = btn.dataset.overdue;
+  const active = btn.classList.contains('active');
+  document.querySelectorAll('.overdue-presets button').forEach(b => b.classList.remove('active'));
+  document.getElementById('overdue-days').value = '';
+  document.getElementById('overdue-hours').value = '';
+  if (!active) {
+    btn.classList.add('active');
+    if (type === '1d') document.getElementById('overdue-days').value = 1;
+    if (type === '3d') document.getElementById('overdue-days').value = 3;
+  }
 }
 
 async function submitForm(e) {
@@ -154,32 +199,32 @@ async function submitForm(e) {
   if (overdueDays) overdue.days = parseInt(overdueDays, 10);
   if (overdueHours) overdue.hours = parseInt(overdueHours, 10);
   if (Object.keys(overdue).length) payload.overdue = overdue;
-  const summary = `Save schedule for slot ${labelFor(payload.chip, payload.pin)}?`;
-
-  if (!confirm(summary)) return;
   await fetch(`${API_BASE}/schedule`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
   e.target.reset();
+  document.querySelectorAll('.repeat-presets button, .overdue-presets button').forEach(b => b.classList.remove('active'));
+  document.getElementById('repeat-advanced').classList.add('hidden');
   fetchSchedules();
 }
 
 async function deleteSchedule() {
   const chip = parseInt(document.getElementById('chip').value, 10);
   const pin = parseInt(document.getElementById('pin').value, 10);
-  if (!confirm(`Delete schedule for slot ${labelFor(chip, pin)}?`)) return;
-
   await fetch(`${API_BASE}/schedule/delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chip, pin })
   });
   document.getElementById('form').reset();
+  document.querySelectorAll('.repeat-presets button, .overdue-presets button').forEach(b => b.classList.remove('active'));
+  document.getElementById('repeat-advanced').classList.add('hidden');
   fetchSchedules();
 }
 
+initTheme();
 buildGrid();
 fetchSchedules();
 document.getElementById('form').addEventListener('submit', submitForm);
@@ -187,9 +232,16 @@ document.getElementById('delete').addEventListener('click', deleteSchedule);
 document.getElementById('show-advanced').addEventListener('click', () => {
   document.getElementById('repeat-advanced').classList.remove('hidden');
 });
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  document.body.classList.toggle('dark');
+  localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+});
 document.querySelectorAll('.quick-due button').forEach(btn => {
   btn.addEventListener('click', () => applyDuePreset(btn.dataset.due));
 });
 document.querySelectorAll('.repeat-presets button[data-repeat]').forEach(btn => {
-  btn.addEventListener('click', () => setRepeatPreset(btn.dataset.repeat));
+  btn.addEventListener('click', () => toggleRepeatPreset(btn));
+});
+document.querySelectorAll('.overdue-presets button').forEach(btn => {
+  btn.addEventListener('click', () => toggleOverduePreset(btn));
 });

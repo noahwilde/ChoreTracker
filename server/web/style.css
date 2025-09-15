@@ -1,17 +1,31 @@
+:root {
+  --bg: #f5f5f5;
+  --text: #333;
+  --card-bg: #fff;
+  --border: #ddd;
+  --primary: #007bff;
+  --primary-hover: #0056b3;
+  --danger: #dc3545;
+  --danger-hover: #a71d2a;
+  --scheduled-bg: #28a745;
+  --scheduled-color: #fff;
+}
+
 body {
   font-family: system-ui, sans-serif;
   margin: 0;
-  background: #f5f5f5;
-  color: #333;
+  background: var(--bg);
+  color: var(--text);
 }
 
 .container {
   max-width: 800px;
   margin: auto;
-  background: #fff;
+  background: var(--card-bg);
   padding: 1rem 2rem;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: relative;
 }
 
 table {
@@ -22,7 +36,7 @@ table {
 
 table th, table td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--border);
   text-align: left;
 }
 
@@ -33,7 +47,7 @@ form label {
 }
 
 fieldset {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -52,16 +66,15 @@ fieldset {
 }
 
 .pin-grid button.scheduled {
-  background: #28a745;
-  color: #fff;
+  background: var(--scheduled-bg);
+  color: var(--scheduled-color);
 }
 
 .pin-grid button.selected {
-  outline: 3px solid #0056b3;
-
+  outline: 3px solid var(--primary-hover);
 }
 
-.quick-due, .repeat-presets {
+.quick-due, .repeat-presets, .overdue-presets {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -73,24 +86,47 @@ fieldset {
 }
 
 .danger {
-  background: #dc3545;
+  background: var(--danger);
 }
 
 .danger:hover {
-  background: #a71d2a;
+  background: var(--danger-hover);
 }
 
 button {
   padding: 0.5rem 1rem;
   border: none;
-  background: #007bff;
+  background: var(--primary);
   color: #fff;
   border-radius: 4px;
   cursor: pointer;
 }
 
 button:hover {
-  background: #0056b3;
+  background: var(--primary-hover);
+}
+
+.repeat-presets button.active,
+.overdue-presets button.active {
+  background: var(--primary-hover);
+}
+
+.theme-toggle {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+body.dark {
+  --bg: #111;
+  --text: #eee;
+  --card-bg: #222;
+  --border: #444;
+  --primary: #3399ff;
+  --primary-hover: #66b3ff;
+  --danger: #ff5c5c;
+  --danger-hover: #cc0000;
+  --scheduled-bg: #2e8b57;
 }
 
 @media (max-width: 600px) {
@@ -111,7 +147,9 @@ button:hover {
   }
 
   .quick-due button,
-  .repeat-presets button {
+  .repeat-presets button,
+  .overdue-presets button {
     flex: 1;
   }
 }
+
