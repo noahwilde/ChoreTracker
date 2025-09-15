@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Chore Schedules</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Chore Schedules</h1>
+    <section id="schedule-list">
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Chip</th><th>Pin</th><th>Due</th><th>Repeat</th><th>Overdue</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+    <section id="schedule-form">
+      <h2>Create / Update Schedule</h2>
+      <form id="form">
+        <label>Name
+          <input type="text" id="name" />
+        </label>
+        <label>Chip
+          <select id="chip"></select>
+        </label>
+        <label>Pin
+          <select id="pin"></select>
+        </label>
+        <label>Due
+          <input type="datetime-local" id="due" required />
+        </label>
+        <fieldset>
+          <legend>Repeat (optional)</legend>
+          <label>Days
+            <input type="number" id="repeat-days" min="0" />
+          </label>
+          <label>Hours
+            <input type="number" id="repeat-hours" min="0" />
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Overdue after (optional)</legend>
+          <label>Days
+            <input type="number" id="overdue-days" min="0" />
+          </label>
+          <label>Hours
+            <input type="number" id="overdue-hours" min="0" />
+          </label>
+        </fieldset>
+        <button type="submit">Save</button>
+      </form>
+    </section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

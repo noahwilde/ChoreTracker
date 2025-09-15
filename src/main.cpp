@@ -23,10 +23,14 @@ struct ButtonData {
   bool buttonState;
   bool lastReading;
   unsigned long lastDebounceTime;
+  bool remoteFlashing;
+  unsigned long lastFlash;
 };
 
 ButtonData buttons[NUM_CHIPS][NUM_PINS];
 const unsigned long DEBOUNCE_DELAY = 50; // milliseconds
+const unsigned long STATE_REFRESH_INTERVAL = 1000; // milliseconds
+unsigned long lastStateFetch = 0;
 
 void connectWiFi() {
   Serial.print("Connecting to WiFi");
@@ -58,32 +62,66 @@ void updateServer(uint8_t chip, uint8_t pin, bool state) {
   http.end();
 }
 
-void fetchInitialStates() {
-  Serial.println("Fetching initial states");
+void fetchStates() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("No WiFi connection; skipping");
     return;
   }
   HTTPClient http;
   String url = String(serverBase) + "/states";
   http.begin(client, url);
   int code = http.GET();
-  Serial.printf("GET /states -> %d\n", code);
   if (code == HTTP_CODE_OK) {
     StaticJsonDocument<512> doc;
     DeserializationError err = deserializeJson(doc, http.getString());
-    if (err) {
-      Serial.printf("Failed to parse state JSON: %s\n", err.c_str());
-    } else {
+    if (!err) {
       JsonArray arr = doc["states"].as<JsonArray>();
       for (uint8_t chip = 0; chip < NUM_CHIPS && chip < arr.size(); ++chip) {
         JsonArray row = arr[chip].as<JsonArray>();
         for (uint8_t pin = 0; pin < NUM_PINS && pin < row.size(); ++pin) {
           bool state = row[pin];
           ButtonData &b = buttons[chip][pin];
-          b.ledState = state;
-          mcp[chip].digitalWrite(b.ledPin, state ? HIGH : LOW);
-          Serial.printf("Initial state chip %u pin %u -> %d\n", chip, pin, state);
+          if (!b.remoteFlashing && b.ledState != state) {
+            b.ledState = state;
+            mcp[chip].digitalWrite(b.ledPin, state ? HIGH : LOW);
+            Serial.printf("State sync chip %u pin %u -> %d\n", chip, pin, state);
+          }
+        }
+      }
+    }
+  }
+  http.end();
+}
+
+void fetchSchedules() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+  HTTPClient http;
+  String url = String(serverBase) + "/schedules";
+  http.begin(client, url);
+  int code = http.GET();
+  if (code == HTTP_CODE_OK) {
+    for (uint8_t chip = 0; chip < NUM_CHIPS; ++chip) {
+      for (uint8_t pin = 0; pin < NUM_PINS; ++pin) {
+        buttons[chip][pin].remoteFlashing = false;
+      }
+    }
+    StaticJsonDocument<1024> doc;
+    DeserializationError err = deserializeJson(doc, http.getString());
+    if (!err) {
+      JsonArray arr = doc["schedules"].as<JsonArray>();
+      for (JsonObject s : arr) {
+        uint8_t chip = s["chip"];
+        uint8_t pin = s["pin"];
+        bool active = s["active"] | false;
+        bool flashing = s["flashing"] | false;
+        if (chip < NUM_CHIPS && pin < NUM_PINS) {
+          ButtonData &b = buttons[chip][pin];
+          if (active && !flashing && !b.ledState) {
+            b.ledState = true;
+            mcp[chip].digitalWrite(b.ledPin, HIGH);
+          }
+          b.remoteFlashing = flashing;
         }
       }
     }
@@ -106,6 +144,8 @@ void setup() {
       b.buttonState = HIGH;     // pull-up -> unpressed
       b.lastReading = HIGH;
       b.lastDebounceTime = 0;
+      b.remoteFlashing = false;
+      b.lastFlash = 0;
 
       mcp[chip].pinMode(b.ledPin, OUTPUT);
       mcp[chip].digitalWrite(b.ledPin, LOW);
@@ -113,7 +153,9 @@ void setup() {
     }
   }
 
-  fetchInitialStates();
+  fetchStates();
+  fetchSchedules();
+  lastStateFetch = millis();
 }
 
 void loop() {
@@ -135,11 +177,28 @@ void loop() {
             Serial.printf("Button press chip %u pin %u -> %s\n", chip, pin,
                           b.ledState ? "ON" : "OFF");
             updateServer(chip, pin, b.ledState);
+            b.remoteFlashing = false;
           }
         }
       }
 
       b.lastReading = reading;
+    }
+  }
+  if (millis() - lastStateFetch > STATE_REFRESH_INTERVAL) {
+    fetchStates();
+    fetchSchedules();
+    lastStateFetch = millis();
+  }
+
+  for (uint8_t chip = 0; chip < NUM_CHIPS; ++chip) {
+    for (uint8_t pin = 0; pin < NUM_PINS; ++pin) {
+      ButtonData &b = buttons[chip][pin];
+      if (b.remoteFlashing && millis() - b.lastFlash >= 1000) {
+        b.lastFlash = millis();
+        b.ledState = !b.ledState;
+        mcp[chip].digitalWrite(b.ledPin, b.ledState ? HIGH : LOW);
+      }
     }
   }
 }
