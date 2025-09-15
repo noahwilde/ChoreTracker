@@ -58,6 +58,7 @@ fieldset {
 
 .pin-grid button.selected {
   outline: 3px solid #0056b3;
+
 }
 
 .quick-due, .repeat-presets {

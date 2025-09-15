@@ -11,7 +11,6 @@ const PIN_LABELS = [
   '7','8','9','10','11','12',
   '13','14','15','16','17','18'
 ];
-
 const scheduleMap = {};
 
 function buildGrid() {
@@ -20,6 +19,7 @@ function buildGrid() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = PIN_LABELS[idx];
+
     btn.dataset.chip = chip;
     btn.dataset.pin = pin;
     btn.addEventListener('click', () => handlePinClick(chip, pin));
@@ -155,6 +155,7 @@ async function submitForm(e) {
   if (overdueHours) overdue.hours = parseInt(overdueHours, 10);
   if (Object.keys(overdue).length) payload.overdue = overdue;
   const summary = `Save schedule for slot ${labelFor(payload.chip, payload.pin)}?`;
+
   if (!confirm(summary)) return;
   await fetch(`${API_BASE}/schedule`, {
     method: 'POST',
@@ -169,6 +170,7 @@ async function deleteSchedule() {
   const chip = parseInt(document.getElementById('chip').value, 10);
   const pin = parseInt(document.getElementById('pin').value, 10);
   if (!confirm(`Delete schedule for slot ${labelFor(chip, pin)}?`)) return;
+
   await fetch(`${API_BASE}/schedule/delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
