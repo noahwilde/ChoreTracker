@@ -10,8 +10,8 @@ constexpr uint8_t NUM_PINS = 6;
 const uint8_t ADDRESSES[NUM_CHIPS] = {0x20, 0x21, 0x22};
 Adafruit_MCP23X17 mcp[NUM_CHIPS];
 
-const char *ssid = "YOUR_SSID";
-const char *password = "YOUR_PASSWORD";
+const char *ssid = "IA Hokies";
+const char *password = "1872!ChicagoMaroon";
 const char *serverBase = "http://192.168.1.40:5000";
 
 WiFiClient client;
