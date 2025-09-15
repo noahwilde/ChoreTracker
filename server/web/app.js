@@ -17,8 +17,9 @@ async function fetchSchedules() {
   const schedules = data.schedules.slice().reverse();
   schedules.forEach(s => {
     const tr = document.createElement('tr');
+    const due = new Date(s.due).toLocaleString();
     tr.innerHTML = `<td>${s.name}</td><td>${s.chip}</td><td>${s.pin}</td>` +
-                   `<td>${s.due}</td>` +
+                   `<td>${due}</td>` +
                    `<td>${formatInterval(s.repeat)}</td><td>${formatInterval(s.overdue)}</td>`;
     tr.addEventListener('click', () => populateForm(s));
     tbody.appendChild(tr);
@@ -33,7 +34,9 @@ function populateForm(s) {
   document.getElementById('chip').value = s.chip;
   document.getElementById('pin').value = s.pin;
   document.getElementById('name').value = s.name || '';
-  document.getElementById('due').value = s.due.slice(0,16);
+  const dueDate = new Date(s.due);
+  dueDate.setMinutes(dueDate.getMinutes() - dueDate.getTimezoneOffset());
+  document.getElementById('due').value = dueDate.toISOString().slice(0,16);
   document.getElementById('repeat-days').value = s.repeat?.days || '';
   document.getElementById('repeat-hours').value = s.repeat?.hours || '';
   document.getElementById('overdue-days').value = s.overdue?.days || '';
