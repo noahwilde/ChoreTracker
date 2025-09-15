@@ -250,13 +250,17 @@ def schedule_loop():
             if not s["active"] and now >= s["due_dt"]:
                 s["active"] = True
                 set_state(s["chip"], s["pin"], 1)
-                s["overdue_start"] = s["due_dt"] + parse_timedelta(s.get("overdue"))
+                s["overdue_start"] = now + parse_timedelta(s.get("overdue"))
             if s["active"]:
-                if not s["flashing"] and now >= s.get("overdue_start", now + timedelta(days=3650)):
+                if not s.get("flashing") and STATES[s["chip"]][s["pin"]] == 0:
+                    set_state(s["chip"], s["pin"], 1)
+                overdue_start = s.get("overdue_start")
+                if overdue_start and now >= overdue_start and not s.get("flashing"):
                     s["flashing"] = True
-                if s["flashing"]:
+                    s["last_flash"] = int(time.time())
+                if s.get("flashing"):
                     current_sec = int(time.time())
-                    if current_sec != s["last_flash"]:
+                    if current_sec != s.get("last_flash"):
                         s["last_flash"] = current_sec
                         new_state = 0 if STATES[s["chip"]][s["pin"]] else 1
                         set_state(s["chip"], s["pin"], new_state)
