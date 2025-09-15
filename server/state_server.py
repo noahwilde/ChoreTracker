@@ -24,7 +24,7 @@ import json
 import os
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import partial
 
 STATE_FILE = "button_states.json"
@@ -228,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def handle_reset(chip, pin):
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     for s in list(SCHEDULES):
         if s["chip"] == chip and s["pin"] == pin:
             if s.get("repeat"):
@@ -245,7 +245,7 @@ def handle_reset(chip, pin):
 
 def schedule_loop():
     while True:
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         for s in SCHEDULES:
             if not s["active"] and now >= s["due_dt"]:
                 s["active"] = True
