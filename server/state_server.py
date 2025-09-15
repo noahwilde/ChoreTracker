@@ -216,6 +216,20 @@ class Handler(BaseHTTPRequestHandler):
             except (KeyError, ValueError, TypeError):
                 pass
             self.send_error(400, "Bad Request")
+        elif self.path == "/schedule/delete":
+            try:
+                chip = int(data["chip"])
+                pin = int(data["pin"])
+                for s in list(SCHEDULES):
+                    if s["chip"] == chip and s["pin"] == pin:
+                        SCHEDULES.remove(s)
+                save_schedules()
+                self._set_json_headers()
+                self.wfile.write(b"{}")
+                return
+            except (KeyError, ValueError, TypeError):
+                pass
+            self.send_error(400, "Bad Request")
         else:
             self.send_error(404, "Not Found")
 

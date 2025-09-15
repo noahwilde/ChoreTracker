@@ -39,6 +39,46 @@ fieldset {
   margin-bottom: 1rem;
 }
 
+.pin-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin-bottom: 1rem;
+}
+
+.pin-grid button {
+  padding: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.pin-grid button.scheduled {
+  border: 2px solid #007bff;
+}
+
+.pin-grid button.selected {
+  background: #28a745;
+  color: #fff;
+}
+
+.quick-due, .repeat-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 1rem;
+}
+
+.hidden {
+  display: none;
+}
+
+.danger {
+  background: #dc3545;
+}
+
+.danger:hover {
+  background: #a71d2a;
+}
+
 button {
   padding: 0.5rem 1rem;
   border: none;
