@@ -29,10 +29,15 @@ ButtonData buttons[NUM_CHIPS][NUM_PINS];
 const unsigned long DEBOUNCE_DELAY = 50; // milliseconds
 
 void connectWiFi() {
+  Serial.print("Connecting to WiFi");
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
+    Serial.print('.');
   }
+  Serial.println();
+  Serial.print("Connected! IP address: ");
+  Serial.println(WiFi.localIP());
 }
 
 void updateServer(uint8_t chip, uint8_t pin, bool state) {
@@ -48,21 +53,28 @@ void updateServer(uint8_t chip, uint8_t pin, bool state) {
   doc["state"] = state;
   String body;
   serializeJson(doc, body);
-  http.POST(body);
+  int code = http.POST(body);
+  Serial.printf("updateServer chip %u pin %u state %d -> %d\n", chip, pin, state, code);
   http.end();
 }
 
 void fetchInitialStates() {
-  if (WiFi.status() != WL_CONNECTED)
+  Serial.println("Fetching initial states");
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("No WiFi connection; skipping");
     return;
+  }
   HTTPClient http;
   String url = String(serverBase) + "/states";
   http.begin(client, url);
   int code = http.GET();
+  Serial.printf("GET /states -> %d\n", code);
   if (code == HTTP_CODE_OK) {
     StaticJsonDocument<512> doc;
     DeserializationError err = deserializeJson(doc, http.getString());
-    if (!err) {
+    if (err) {
+      Serial.printf("Failed to parse state JSON: %s\n", err.c_str());
+    } else {
       JsonArray arr = doc["states"].as<JsonArray>();
       for (uint8_t chip = 0; chip < NUM_CHIPS && chip < arr.size(); ++chip) {
         JsonArray row = arr[chip].as<JsonArray>();
@@ -71,6 +83,7 @@ void fetchInitialStates() {
           ButtonData &b = buttons[chip][pin];
           b.ledState = state;
           mcp[chip].digitalWrite(b.ledPin, state ? HIGH : LOW);
+          Serial.printf("Initial state chip %u pin %u -> %d\n", chip, pin, state);
         }
       }
     }
@@ -79,6 +92,7 @@ void fetchInitialStates() {
 }
 
 void setup() {
+  Serial.begin(115200);
   Wire.begin(D2, D1); // SDA, SCL
   connectWiFi();
 
@@ -118,6 +132,8 @@ void loop() {
           if (b.buttonState == LOW) {
             b.ledState = !b.ledState;
             mcp[chip].digitalWrite(b.ledPin, b.ledState ? HIGH : LOW);
+            Serial.printf("Button press chip %u pin %u -> %s\n", chip, pin,
+                          b.ledState ? "ON" : "OFF");
             updateServer(chip, pin, b.ledState);
           }
         }
