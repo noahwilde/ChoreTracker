@@ -254,6 +254,42 @@ def schedule_loop():
         time.sleep(1)
 
 
+def handle_reset(chip, pin):
+    now = datetime.now()
+    for s in list(SCHEDULES):
+        if s["chip"] == chip and s["pin"] == pin:
+            if s.get("repeat"):
+                s["active"] = False
+                s["flashing"] = False
+                s["due_dt"] = add_interval(s["due_dt"], s["repeat"])
+                while s["due_dt"] <= now:
+                    s["due_dt"] = add_interval(s["due_dt"], s["repeat"])
+            else:
+                SCHEDULES.remove(s)
+            save_schedules()
+            break
+
+
+def schedule_loop():
+    while True:
+        now = datetime.now()
+        for s in SCHEDULES:
+            if not s["active"] and now >= s["due_dt"]:
+                s["active"] = True
+                set_state(s["chip"], s["pin"], 1)
+                s["overdue_start"] = s["due_dt"] + parse_timedelta(s.get("overdue"))
+            if s["active"]:
+                if not s["flashing"] and now >= s.get("overdue_start", now + timedelta(days=3650)):
+                    s["flashing"] = True
+                if s["flashing"]:
+                    current_sec = int(time.time())
+                    if current_sec != s["last_flash"]:
+                        s["last_flash"] = current_sec
+                        new_state = 0 if STATES[s["chip"]][s["pin"]] else 1
+                        set_state(s["chip"], s["pin"], new_state)
+        time.sleep(1)
+
+
 def run():
     server_address = ("", 5000)
     httpd = HTTPServer(server_address, Handler)
