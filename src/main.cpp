@@ -27,6 +27,8 @@ struct ButtonData {
 
 ButtonData buttons[NUM_CHIPS][NUM_PINS];
 const unsigned long DEBOUNCE_DELAY = 50; // milliseconds
+const unsigned long STATE_REFRESH_INTERVAL = 1000; // milliseconds
+unsigned long lastStateFetch = 0;
 
 void connectWiFi() {
   Serial.print("Connecting to WiFi");
@@ -58,32 +60,29 @@ void updateServer(uint8_t chip, uint8_t pin, bool state) {
   http.end();
 }
 
-void fetchInitialStates() {
-  Serial.println("Fetching initial states");
+void fetchStates() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("No WiFi connection; skipping");
     return;
   }
   HTTPClient http;
   String url = String(serverBase) + "/states";
   http.begin(client, url);
   int code = http.GET();
-  Serial.printf("GET /states -> %d\n", code);
   if (code == HTTP_CODE_OK) {
     StaticJsonDocument<512> doc;
     DeserializationError err = deserializeJson(doc, http.getString());
-    if (err) {
-      Serial.printf("Failed to parse state JSON: %s\n", err.c_str());
-    } else {
+    if (!err) {
       JsonArray arr = doc["states"].as<JsonArray>();
       for (uint8_t chip = 0; chip < NUM_CHIPS && chip < arr.size(); ++chip) {
         JsonArray row = arr[chip].as<JsonArray>();
         for (uint8_t pin = 0; pin < NUM_PINS && pin < row.size(); ++pin) {
           bool state = row[pin];
           ButtonData &b = buttons[chip][pin];
-          b.ledState = state;
-          mcp[chip].digitalWrite(b.ledPin, state ? HIGH : LOW);
-          Serial.printf("Initial state chip %u pin %u -> %d\n", chip, pin, state);
+          if (b.ledState != state) {
+            b.ledState = state;
+            mcp[chip].digitalWrite(b.ledPin, state ? HIGH : LOW);
+            Serial.printf("State sync chip %u pin %u -> %d\n", chip, pin, state);
+          }
         }
       }
     }
@@ -113,7 +112,8 @@ void setup() {
     }
   }
 
-  fetchInitialStates();
+  fetchStates();
+  lastStateFetch = millis();
 }
 
 void loop() {
@@ -141,5 +141,9 @@ void loop() {
 
       b.lastReading = reading;
     }
+  }
+  if (millis() - lastStateFetch > STATE_REFRESH_INTERVAL) {
+    fetchStates();
+    lastStateFetch = millis();
   }
 }

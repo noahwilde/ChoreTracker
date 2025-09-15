@@ -1,24 +1,30 @@
-"""Simple HTTP server to persist button states.
+"""Simple HTTP server to persist button states and schedules.
 
-Run this on the Linux host (e.g. 192.168.1.40) with:
+Run this on the Linux host (e.g. 192.168.1.40) with::
 
     python3 server/state_server.py
 
-It exposes two endpoints:
+Endpoints::
 
 * ``GET /states`` – return all button states as JSON.
-* ``POST /state`` – update a single button state. The request body must be
-  JSON containing ``chip``, ``pin`` and ``state`` fields.
+* ``POST /state`` – update a single button state. The request body must contain
+  ``chip``, ``pin`` and ``state`` fields.
+* ``GET /schedules`` – return configured schedules.
+* ``POST /schedule`` – create or replace a schedule.
 
-States are persisted to ``button_states.json`` in the current working
-directory so they survive restarts.
+States are persisted to ``button_states.json`` and schedules to
+``schedules.json`` in the current working directory so they survive restarts.
 """
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
+import threading
+import time
+from datetime import datetime, timedelta
 
 STATE_FILE = "button_states.json"
+SCHEDULE_FILE = "schedules.json"
 NUM_CHIPS = 3
 NUM_PINS = 6
 
@@ -35,7 +41,89 @@ def save_states(states):
         json.dump(states, f)
 
 
+def parse_timedelta(data):
+    if not data:
+        return timedelta(0)
+    return timedelta(
+        weeks=int(data.get("weeks", 0)),
+        days=int(data.get("days", 0)),
+        hours=int(data.get("hours", 0)),
+        minutes=int(data.get("minutes", 0)),
+        seconds=int(data.get("seconds", 0)),
+    )
+
+
+def add_interval(dt, repeat):
+    """Return dt advanced by the repeat interval.
+
+    Supports ``years`` and ``months`` as well as timedelta fields.
+    """
+
+    years = int(repeat.get("years", 0))
+    months = int(repeat.get("months", 0)) + years * 12
+    if months:
+        month = dt.month - 1 + months
+        year = dt.year + month // 12
+        month = month % 12 + 1
+        # clamp day to end of month
+        days_in_month = [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+                         31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
+        day = min(dt.day, days_in_month)
+        dt = dt.replace(year=year, month=month, day=day)
+    td = timedelta(
+        weeks=int(repeat.get("weeks", 0)),
+        days=int(repeat.get("days", 0)),
+        hours=int(repeat.get("hours", 0)),
+        minutes=int(repeat.get("minutes", 0)),
+        seconds=int(repeat.get("seconds", 0)),
+    )
+    return dt + td
+
+
+def load_schedules():
+    data = []
+    if os.path.exists(SCHEDULE_FILE):
+        with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    schedules = []
+    for s in data:
+        sched = {
+            "chip": int(s["chip"]),
+            "pin": int(s["pin"]),
+            "due_dt": datetime.fromisoformat(s["due"]),
+            "repeat": s.get("repeat", {}),
+            "overdue": s.get("overdue", {}),
+            "active": False,
+            "flashing": False,
+            "last_flash": 0,
+        }
+        schedules.append(sched)
+    return schedules
+
+
+def save_schedules():
+    data = []
+    for s in SCHEDULES:
+        data.append(
+            {
+                "chip": s["chip"],
+                "pin": s["pin"],
+                "due": s["due_dt"].isoformat(),
+                "repeat": s.get("repeat", {}),
+                "overdue": s.get("overdue", {}),
+            }
+        )
+    with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def set_state(chip, pin, state):
+    STATES[chip][pin] = state
+    save_states(STATES)
+
+
 STATES = load_states()
+SCHEDULES = load_schedules()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -48,23 +136,68 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/states":
             self._set_json_headers()
             self.wfile.write(json.dumps({"states": STATES}).encode())
+        elif self.path == "/schedules":
+            self._set_json_headers()
+            out = []
+            for s in SCHEDULES:
+                out.append(
+                    {
+                        "chip": s["chip"],
+                        "pin": s["pin"],
+                        "due": s["due_dt"].isoformat(),
+                        "repeat": s.get("repeat", {}),
+                        "overdue": s.get("overdue", {}),
+                    }
+                )
+            self.wfile.write(json.dumps({"schedules": out}).encode())
         else:
             self.send_error(404, "Not Found")
 
     def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        data = json.loads(self.rfile.read(length).decode())
         if self.path == "/state":
-            length = int(self.headers.get("Content-Length", 0))
-            data = json.loads(self.rfile.read(length).decode())
             try:
                 chip = int(data["chip"])
                 pin = int(data["pin"])
                 state = 1 if data["state"] else 0
                 if 0 <= chip < NUM_CHIPS and 0 <= pin < NUM_PINS:
-                    STATES[chip][pin] = state
-                    save_states(STATES)
+                    set_state(chip, pin, state)
+                    if state == 0:
+                        handle_reset(chip, pin)
                     self._set_json_headers()
                     self.wfile.write(b"{}")
                     return
+            except (KeyError, ValueError, TypeError):
+                pass
+            self.send_error(400, "Bad Request")
+        elif self.path == "/schedule":
+            try:
+                chip = int(data["chip"])
+                pin = int(data["pin"])
+                due = datetime.fromisoformat(data["due"])
+                repeat = data.get("repeat", {})
+                overdue = data.get("overdue", {})
+                # remove existing schedule for this light
+                for s in list(SCHEDULES):
+                    if s["chip"] == chip and s["pin"] == pin:
+                        SCHEDULES.remove(s)
+                SCHEDULES.append(
+                    {
+                        "chip": chip,
+                        "pin": pin,
+                        "due_dt": due,
+                        "repeat": repeat,
+                        "overdue": overdue,
+                        "active": False,
+                        "flashing": False,
+                        "last_flash": 0,
+                    }
+                )
+                save_schedules()
+                self._set_json_headers()
+                self.wfile.write(b"{}")
+                return
             except (KeyError, ValueError, TypeError):
                 pass
             self.send_error(400, "Bad Request")
@@ -72,10 +205,47 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404, "Not Found")
 
 
+def handle_reset(chip, pin):
+    now = datetime.now()
+    for s in list(SCHEDULES):
+        if s["chip"] == chip and s["pin"] == pin:
+            if s.get("repeat"):
+                s["active"] = False
+                s["flashing"] = False
+                s["due_dt"] = add_interval(s["due_dt"], s["repeat"])
+                while s["due_dt"] <= now:
+                    s["due_dt"] = add_interval(s["due_dt"], s["repeat"])
+            else:
+                SCHEDULES.remove(s)
+            save_schedules()
+            break
+
+
+def schedule_loop():
+    while True:
+        now = datetime.now()
+        for s in SCHEDULES:
+            if not s["active"] and now >= s["due_dt"]:
+                s["active"] = True
+                set_state(s["chip"], s["pin"], 1)
+                s["overdue_start"] = s["due_dt"] + parse_timedelta(s.get("overdue"))
+            if s["active"]:
+                if not s["flashing"] and now >= s.get("overdue_start", now + timedelta(days=3650)):
+                    s["flashing"] = True
+                if s["flashing"]:
+                    current_sec = int(time.time())
+                    if current_sec != s["last_flash"]:
+                        s["last_flash"] = current_sec
+                        new_state = 0 if STATES[s["chip"]][s["pin"]] else 1
+                        set_state(s["chip"], s["pin"], new_state)
+        time.sleep(1)
+
+
 def run():
     server_address = ("", 5000)
     httpd = HTTPServer(server_address, Handler)
     print("Starting button state server on port 5000")
+    threading.Thread(target=schedule_loop, daemon=True).start()
     httpd.serve_forever()
 
 
