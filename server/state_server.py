@@ -90,12 +90,12 @@ def load_schedules():
         sched = {
             "chip": int(s["chip"]),
             "pin": int(s["pin"]),
+            "name": s.get("name", ""),
             "due_dt": datetime.fromisoformat(s["due"]),
             "repeat": s.get("repeat", {}),
             "overdue": s.get("overdue", {}),
             "active": False,
             "flashing": False,
-            "last_flash": 0,
         }
         schedules.append(sched)
     return schedules
@@ -108,6 +108,7 @@ def save_schedules():
             {
                 "chip": s["chip"],
                 "pin": s["pin"],
+                "name": s.get("name", ""),
                 "due": s["due_dt"].isoformat(),
                 "repeat": s.get("repeat", {}),
                 "overdue": s.get("overdue", {}),
@@ -130,7 +131,13 @@ class Handler(BaseHTTPRequestHandler):
     def _set_json_headers(self, code=200):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+
+    def do_OPTIONS(self):
+        self._set_json_headers(204)
 
     def do_GET(self):
         if self.path == "/states":
@@ -144,9 +151,12 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "chip": s["chip"],
                         "pin": s["pin"],
+                        "name": s.get("name", ""),
                         "due": s["due_dt"].isoformat(),
                         "repeat": s.get("repeat", {}),
                         "overdue": s.get("overdue", {}),
+                        "active": s.get("active", False),
+                        "flashing": s.get("flashing", False),
                     }
                 )
             self.wfile.write(json.dumps({"schedules": out}).encode())
@@ -175,6 +185,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 chip = int(data["chip"])
                 pin = int(data["pin"])
+                name = data.get("name", "")
                 due = datetime.fromisoformat(data["due"])
                 repeat = data.get("repeat", {})
                 overdue = data.get("overdue", {})
@@ -186,12 +197,12 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "chip": chip,
                         "pin": pin,
+                        "name": name,
                         "due_dt": due,
                         "repeat": repeat,
                         "overdue": overdue,
                         "active": False,
                         "flashing": False,
-                        "last_flash": 0,
                     }
                 )
                 save_schedules()
@@ -203,6 +214,44 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(400, "Bad Request")
         else:
             self.send_error(404, "Not Found")
+
+    def send_error(self, code, message=None):
+        self._set_json_headers(code)
+        if message:
+            self.wfile.write(json.dumps({"error": message}).encode())
+        else:
+            self.wfile.write(b"{}")
+
+
+def handle_reset(chip, pin):
+    now = datetime.now()
+    for s in list(SCHEDULES):
+        if s["chip"] == chip and s["pin"] == pin:
+            if s.get("repeat"):
+                s["active"] = False
+                s["flashing"] = False
+                s["due_dt"] = add_interval(s["due_dt"], s["repeat"])
+                while s["due_dt"] <= now:
+                    s["due_dt"] = add_interval(s["due_dt"], s["repeat"])
+            else:
+                SCHEDULES.remove(s)
+            save_schedules()
+            break
+
+
+def schedule_loop():
+    while True:
+        now = datetime.now()
+        for s in SCHEDULES:
+            if not s["active"] and now >= s["due_dt"]:
+                s["active"] = True
+                set_state(s["chip"], s["pin"], 1)
+                s["overdue_start"] = s["due_dt"] + parse_timedelta(s.get("overdue"))
+            if s["active"]:
+                if not s["flashing"] and now >= s.get("overdue_start", now + timedelta(days=3650)):
+                    s["flashing"] = True
+                # actual flashing handled by firmware
+        time.sleep(1)
 
 
 def handle_reset(chip, pin):
