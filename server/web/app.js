@@ -6,13 +6,20 @@ const PIN_LAYOUT = [
   [ [0,5], [0,4], [1,5], [1,4], [2,5], [2,4] ],
 ];
 
+const PIN_LABELS = [
+  '1','2','3','4','5','6',
+  '7','8','9','10','11','12',
+  '13','14','15','16','17','18'
+];
 const scheduleMap = {};
 
 function buildGrid() {
   const grid = document.getElementById('pin-grid');
-  PIN_LAYOUT.flat().forEach(([chip, pin]) => {
+  PIN_LAYOUT.flat().forEach(([chip, pin], idx) => {
     const btn = document.createElement('button');
-    btn.textContent = `${chip}/${pin}`;
+    btn.type = 'button';
+    btn.textContent = PIN_LABELS[idx];
+
     btn.dataset.chip = chip;
     btn.dataset.pin = pin;
     btn.addEventListener('click', () => handlePinClick(chip, pin));
@@ -52,7 +59,7 @@ async function fetchSchedules() {
     scheduleMap[`${s.chip}-${s.pin}`] = s;
     const tr = document.createElement('tr');
     const due = new Date(s.due).toLocaleString();
-    tr.innerHTML = `<td>${s.name}</td><td>${s.chip}</td><td>${s.pin}</td>` +
+    tr.innerHTML = `<td>${s.name}</td><td>${labelFor(s.chip, s.pin)}</td>` +
                    `<td>${due}</td>` +
                    `<td>${formatInterval(s.repeat)}</td><td>${formatInterval(s.overdue)}</td>`;
     tr.addEventListener('click', () => populateForm(s));
@@ -60,6 +67,11 @@ async function fetchSchedules() {
     const btn = document.querySelector(`#pin-grid button[data-chip="${s.chip}"][data-pin="${s.pin}"]`);
     if (btn) btn.classList.add('scheduled');
   });
+}
+
+function labelFor(chip, pin) {
+  const idx = PIN_LAYOUT.flat().findIndex(([c,p]) => c === chip && p === pin);
+  return PIN_LABELS[idx] || `${chip}/${pin}`;
 }
 
 function formatInterval(obj) {
@@ -89,25 +101,22 @@ function applyDuePreset(type) {
   const now = new Date();
   let target = new Date(now);
   switch(type) {
-    case '7am':
-      target.setHours(7,0,0,0);
+    case 'morning':
+      target.setHours(8,0,0,0);
       if (target <= now) target.setDate(target.getDate()+1);
       break;
-    case '5pm':
-      target.setHours(17,0,0,0);
+    case 'evening':
+      target.setHours(18,0,0,0);
       if (target <= now) target.setDate(target.getDate()+1);
       break;
-    case '+1d':
+    case 'plus1d':
       target = new Date(now.getTime() + 24*60*60*1000);
       break;
-    case '+3d':
+    case 'plus3d':
       target = new Date(now.getTime() + 3*24*60*60*1000);
       break;
-    case 'tomorrow':
-      target.setDate(now.getDate()+1);
-      break;
     case 'nextweek':
-      target.setDate(now.getDate()+7);
+      target = new Date(now.getTime() + 7*24*60*60*1000);
       break;
     default:
       return;
@@ -145,7 +154,8 @@ async function submitForm(e) {
   if (overdueDays) overdue.days = parseInt(overdueDays, 10);
   if (overdueHours) overdue.hours = parseInt(overdueHours, 10);
   if (Object.keys(overdue).length) payload.overdue = overdue;
-  const summary = `Save schedule for chip ${payload.chip} pin ${payload.pin}?`;
+  const summary = `Save schedule for slot ${labelFor(payload.chip, payload.pin)}?`;
+
   if (!confirm(summary)) return;
   await fetch(`${API_BASE}/schedule`, {
     method: 'POST',
@@ -159,7 +169,8 @@ async function submitForm(e) {
 async function deleteSchedule() {
   const chip = parseInt(document.getElementById('chip').value, 10);
   const pin = parseInt(document.getElementById('pin').value, 10);
-  if (!confirm('Delete schedule?')) return;
+  if (!confirm(`Delete schedule for slot ${labelFor(chip, pin)}?`)) return;
+
   await fetch(`${API_BASE}/schedule/delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

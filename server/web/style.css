@@ -1,6 +1,6 @@
 body {
   font-family: system-ui, sans-serif;
-  margin: 2rem;
+  margin: 0;
   background: #f5f5f5;
   color: #333;
 }
@@ -9,7 +9,7 @@ body {
   max-width: 800px;
   margin: auto;
   background: #fff;
-  padding: 2rem;
+  padding: 1rem 2rem;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
@@ -52,12 +52,13 @@ fieldset {
 }
 
 .pin-grid button.scheduled {
-  border: 2px solid #007bff;
+  background: #28a745;
+  color: #fff;
 }
 
 .pin-grid button.selected {
-  background: #28a745;
-  color: #fff;
+  outline: 3px solid #0056b3;
+
 }
 
 .quick-due, .repeat-presets {
@@ -90,4 +91,27 @@ button {
 
 button:hover {
   background: #0056b3;
+}
+
+@media (max-width: 600px) {
+  .container {
+    max-width: 100%;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 1rem;
+  }
+
+  .pin-grid {
+    gap: 2px;
+  }
+
+  .pin-grid button {
+    font-size: 0.9rem;
+  }
+
+  .quick-due button,
+  .repeat-presets button {
+    flex: 1;
+  }
 }

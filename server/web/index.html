@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chore Schedules</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -11,7 +12,7 @@
     <section id="schedule-list">
       <table>
         <thead>
-          <tr><th>Name</th><th>Chip</th><th>Pin</th><th>Due</th><th>Repeat</th><th>Overdue</th></tr>
+          <tr><th>Name</th><th>Slot</th><th>Due</th><th>Repeat</th><th>Overdue</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -29,12 +30,12 @@
           <input type="datetime-local" id="due" required />
         </label>
         <div class="quick-due">
-          <button type="button" data-due="7am">7 am</button>
-          <button type="button" data-due="5pm">5 pm</button>
-          <button type="button" data-due="+1d">+1 day</button>
-          <button type="button" data-due="+3d">+3 days</button>
-          <button type="button" data-due="tomorrow">Tomorrow</button>
-          <button type="button" data-due="nextweek">Next Week</button>
+          <button type="button" data-due="morning">Morning</button>
+          <button type="button" data-due="evening">Evening</button>
+          <button type="button" data-due="plus1d">+1 day</button>
+          <button type="button" data-due="plus3d">+3 days</button>
+          <button type="button" data-due="nextweek">Next week</button>
+
         </div>
         <fieldset>
           <legend>Repeat (optional)</legend>
