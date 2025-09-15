@@ -13,11 +13,18 @@ const PIN_LABELS = [
 ];
 const scheduleMap = {};
 
+function updateThemeIcon() {
+  const btn = document.getElementById('theme-toggle');
+  const dark = document.body.classList.contains('dark');
+  btn.textContent = dark ? '☀' : '☾';
+}
+
 function initTheme() {
   const stored = localStorage.getItem('theme');
   const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const useDark = stored ? stored === 'dark' : preferDark;
   document.body.classList.toggle('dark', useDark);
+  updateThemeIcon();
 }
 
 function buildGrid() {
@@ -235,6 +242,7 @@ document.getElementById('show-advanced').addEventListener('click', () => {
 document.getElementById('theme-toggle').addEventListener('click', () => {
   document.body.classList.toggle('dark');
   localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+  updateThemeIcon();
 });
 document.querySelectorAll('.quick-due button').forEach(btn => {
   btn.addEventListener('click', () => applyDuePreset(btn.dataset.due));
